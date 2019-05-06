@@ -7,6 +7,9 @@ type timeWheel struct {
 	unregister chan int
 	wheel      *delayQueue
 	flagQueue  map[int]struct{}
+
+	workerNum int
+	taskCh    chan func()
 }
 
 func NewTimeWheel() *timeWheel {
@@ -15,6 +18,8 @@ func NewTimeWheel() *timeWheel {
 		unregister: make(chan int),
 		wheel:      newDelayQueue(),
 		flagQueue:  make(map[int]struct{}),
+		workerNum:  10,
+		taskCh:     make(chan func()),
 	}
 }
 
@@ -37,7 +42,9 @@ func (t *timeWheel) act(task *task) {
 		t.wheel.Push(task)
 	}
 
-	task.job()
+	// task.job()
+	t.taskCh <- task.job
+
 	task.times++
 }
 
@@ -71,6 +78,14 @@ func (t *timeWheel) run() {
 }
 
 func (t *timeWheel) Start() {
+	for i := 0; i < t.workerNum; i++ {
+		go func() {
+			for task := range t.taskCh {
+				task()
+			}
+		}()
+	}
+
 	go t.run()
 }
 
